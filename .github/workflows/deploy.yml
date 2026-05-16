@@ -49,6 +49,14 @@ jobs:
             --stack-name link-shortener \
             --capabilities CAPABILITY_NAMED_IAM
 
+      - name: Deploy Lambda code
+        run: |
+          cd lambda
+          zip function.zip handler.py
+          aws lambda update-function-code \
+            --function-name link-shortener \
+            --zip-file fileb://function.zip
+
       - name: Get API URL
         id: api_url
         run: |
