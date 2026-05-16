@@ -124,7 +124,7 @@
       <p>Link gerado:</p>
       <div class="result-url">
         <a id="result-link" href="#" target="_blank"></a>
-        <button class="copy-btn" onclick="copy()">copiar</button>
+        <button class="copy-btn" onclick="copyUrl()">copiar</button>
       </div>
     </div>
 
@@ -173,7 +173,7 @@
       }
     }
 
-    function copy() {
+    function copyUrl() {
       const link = document.getElementById("result-link").textContent
       navigator.clipboard.writeText(link)
         .then(() => {
