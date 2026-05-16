@@ -118,7 +118,7 @@
     <h1>// <span>Encurtador de Links</span></h1>
 
     <input type="url" id="input" placeholder="https://sua-url-longa.com/aqui" />
-    <button id="btn" onclick="shorten()">encurtar</button>
+    <button id="btn" onclick="shortenUrl()">encurtar</button>
 
     <div class="result" id="result">
       <p>Link gerado:</p>
@@ -134,7 +134,7 @@
   <script>
     const API_URL = "API_URL";
 
-    async function shorten() {
+    async function shortenUrl() {
       const input = document.getElementById("input");
       const btn = document.getElementById("btn");
       const result = document.getElementById("result");
@@ -184,7 +184,7 @@
     }
 
     document.getElementById("input").addEventListener("keydown", e => {
-      if (e.key === "Enter") shorten()
+      if (e.key === "Enter") shortenUrl()
     })
   </script>
 </body>
