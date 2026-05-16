@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="icon.png">
+  <title>LinkShortener</title>
+
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: monospace;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      font-weight: normal;
+      color: #888;
+      margin-bottom: 2rem;
+    }
+
+    h1 span { color: #f0f0f0; }
+
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      color: #f0f0f0;
+      font-family: monospace;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus { border-color: #555; }
+
+    button {
+      width: 100%;
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      background: #f0f0f0;
+      color: #0f0f0f;
+      border: none;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #ccc; }
+    button:disabled { background: #444; color: #888; cursor: not-allowed; }
+
+    .result {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .result p {
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 0.5rem;
+    }
+
+    .result-url {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .result-url a {
+      color: #f0f0f0;
+      text-decoration: none;
+      font-size: 0.95rem;
+      word-break: break-all;
+    }
+
+    .result-url a:hover { text-decoration: underline; }
+
+    .copy-btn {
+      width: auto;
+      margin: 0;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+
+    .error {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: #e05555;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>// <span>Encurtador de Links</span></h1>
+
+    <input type="url" id="input" placeholder="https://sua-url-longa.com/aqui" />
+    <button id="btn" onclick="shorten()">encurtar</button>
+
+    <div class="result" id="result">
+      <p>Link gerado:</p>
+      <div class="result-url">
+        <a id="result-link" href="#" target="_blank"></a>
+        <button class="copy-btn" onclick="copy()">copiar</button>
+      </div>
+    </div>
+
+    <p class="error" id="error"></p>
+  </div>
+
+  <script>
+    const API_URL = "API_URL";
+
+    async function shorten() {
+      const input = document.getElementById("input");
+      const btn = document.getElementById("btn");
+      const result = document.getElementById("result");
+      const error = document.getElementById("error");
+
+      const url = input.value.trim();
+
+      if (!url) return;
+
+      btn.disabled = true;
+      btn.textContent = "encurtando...";
+      result.style.display = "none";
+      error.style.display = "none";
+
+      try {
+        const res = await fetch(`${API_URL}/links`,{
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({url})
+        });
+
+        const data = await res.json();
+
+        const shortUrl = `${API_URL}/${data.short_url}`;
+        const link = document.getElementById("result-link");
+        link.href = shortUrl;
+        link.textContent = shortUrl;
+        result.style.display = "block";
+
+      } catch(e) {
+        error.textContent = e.message;
+        error.style.display = "block";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "encurtar";
+      }
+    }
+
+    function copy() {
+      const link = document.getElementById("result-link").textContent
+      navigator.clipboard.writeText(link)
+        .then(() => {
+          const btn = document.querySelector(".copy-btn")
+          btn.textContent = "copiado!"
+          setTimeout(() => btn.textContent = "copiar", 2000)
+        })
+    }
+
+    document.getElementById("input").addEventListener("keydown", e => {
+      if (e.key === "Enter") shorten()
+    })
+  </script>
+</body>
+</html>
