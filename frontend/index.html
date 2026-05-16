@@ -175,12 +175,23 @@
 
     function copyUrl() {
       const link = document.getElementById("result-link").textContent
-      navigator.clipboard.writeText(link)
-        .then(() => {
-          const btn = document.querySelector(".copy-btn")
+      const btn = document.querySelector(".copy-btn")
+      
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).then(() => {
           btn.textContent = "copiado!"
           setTimeout(() => btn.textContent = "copiar", 2000)
         })
+      } else {
+        const textarea = document.createElement("textarea")
+        textarea.value = link
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand("copy")
+        document.body.removeChild(textarea)
+        btn.textContent = "copiado!"
+        setTimeout(() => btn.textContent = "copiar", 2000)
+      }
     }
 
     document.getElementById("input").addEventListener("keydown", e => {
