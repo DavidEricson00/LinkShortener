@@ -111,3 +111,8 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*
+
+Outputs:
+  ApiUrl:
+    Value: !GetAtt ApiGateway.ApiEndpoint
+    Description: API Gateway URL
