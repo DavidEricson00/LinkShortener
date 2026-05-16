@@ -1,0 +1,73 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install pytest boto3
+
+      - name: Run tests
+        run: pytest lambda/test_handler.py -v
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file template.yaml \
+            --stack-name link-shortener \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      - name: Get API URL
+        id: api_url
+        run: |
+          URL=$(aws cloudformation describe-stacks \
+            --stack-name link-shortener \
+            --query "Stacks[0].Outputs[0].OutputValue" \
+            --output text)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Update frontend with API URL
+        run: |
+          sed -i 's|API_URL|${{ steps.api_url.outputs.url }}|g' frontend/index.html
+
+      - name: Create S3 bucket if not exists
+        run: |
+          aws s3 mb s3://link-shortener-${{ secrets.AWS_ACCOUNT_ID }} --region us-east-1 || true
+          aws s3 website s3://link-shortener-${{ secrets.AWS_ACCOUNT_ID }} \
+            --index-document index.html
+
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync frontend/ s3://link-shortener-${{ secrets.AWS_ACCOUNT_ID }} \
+            --acl public-read
