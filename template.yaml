@@ -233,15 +233,9 @@ Resources:
       ApiId: !Ref ApiGateway
       StageName: "$default"
       AutoDeploy: true
-
       DefaultRouteSettings:
         ThrottlingRateLimit: 100
         ThrottlingBurstLimit: 200
-
-      RouteSettings:
-        "POST /links":
-          ThrottlingRateLimit: 5
-          ThrottlingBurstLimit: 10
 
   AuthorizerPermission:
     Type: AWS::Lambda::Permission
