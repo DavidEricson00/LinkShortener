@@ -188,6 +188,7 @@ Resources:
           - DELETE
         AllowHeaders:
           - Content-Type
+          - x-api-key
 
   ApiAuthorizer:
     Type: AWS::ApiGatewayV2::Authorizer
