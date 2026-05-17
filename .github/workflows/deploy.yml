@@ -82,6 +82,7 @@ jobs:
       - name: Update frontend with API URL
         run: |
           sed -i "s|%%API_URL%%|${{ steps.api_url.outputs.url }}|g" frontend/index.html
+          sed -i "s|%%API_KEY%%|${{ secrets.API_KEY }}|g" frontend/index.html
 
       - name: Create S3 bucket if not exists
         run: |
