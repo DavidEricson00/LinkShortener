@@ -58,6 +58,11 @@ jobs:
             --function-name link-shortener \
             --zip-file fileb://function.zip
 
+          zip analytics.zip analytics.py
+          aws lambda update-function-code \
+            --function-name link-analytics \
+            --zip-file fileb://analytics.zip
+
       - name: Get API URL
         id: api_url
         run: |
