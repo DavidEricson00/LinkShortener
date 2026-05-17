@@ -23,7 +23,7 @@ jobs:
         run: pip install pytest boto3
 
       - name: Run tests
-        run: pytest lambda/test_handler.py -v
+        run: pytest lambda/test_handler.py lambda/test_authorizer.py -v
 
   deploy:
     name: Deploy
