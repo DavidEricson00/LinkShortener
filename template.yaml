@@ -5,6 +5,10 @@ Parameters:
   AlertEmail:
     Type: String
     Description: Email to receive CloudWatch alerts
+  ApiKeyValue:
+    Type: String
+    NoEcho: true
+    Description: Secret key to protect POST /links
 
 Resources:
 
@@ -101,6 +105,30 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "*"
 
+  AuthorizerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: link-authorizer-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: link-authorizer-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -131,6 +159,21 @@ Resources:
         Variables:
           TABLE_NAME: clicks
 
+  AuthorizerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: link-authorizer
+      Runtime: python3.12
+      Handler: authorizer.handler
+      Role: !GetAtt AuthorizerRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+            return {"isAuthorized": False}
+      Environment:
+        Variables:
+          API_KEY: !Ref ApiKeyValue
+
   ApiGateway:
     Type: AWS::ApiGatewayV2::Api
     Properties:
@@ -146,6 +189,18 @@ Resources:
         AllowHeaders:
           - Content-Type
 
+  ApiAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref ApiGateway
+      AuthorizerType: REQUEST
+      AuthorizerPayloadFormatVersion: "2.0"
+      AuthorizerFunctionArn: !GetAtt AuthorizerFunction.Arn
+      EnableSimpleResponses: true
+      Name: api-key-authorizer
+      IdentitySource:
+        - "$request.header.x-api-key"
+
   LambdaIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -159,6 +214,8 @@ Resources:
     Properties:
       ApiId: !Ref ApiGateway
       RouteKey: "POST /links"
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref ApiAuthorizer
       Target: !Sub integrations/${LambdaIntegration}
 
   RouteGet:
@@ -175,6 +232,14 @@ Resources:
       StageName: "$default"
       AutoDeploy: true
 
+  AuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthorizerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*
+  
   LambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
