@@ -2,6 +2,7 @@ import json
 import boto3
 import os
 import secrets
+import time
 
 def get_table():
     dynamodb = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1"))
@@ -17,11 +18,21 @@ def create_link(event):
             return {"statusCode": 400, "body": json.dumps({"error": "url is required"})}
 
         slug = secrets.token_urlsafe(4)
-        table.put_item(Item={"id": slug, "url": url})
+        expires_at = int(time.time()) + (30 * 24 * 60 * 60)
+       
+        table.put_item(Item={
+            "id": slug,
+            "url": url,
+            "expires_at": expires_at
+        })
 
         return {
             "statusCode": 201,
-            "body": json.dumps({"short_url": slug, "url": url})
+            "body": json.dumps({
+                "short_url": slug,
+                "url": url,
+                "expires_at": expires_at
+            })
         }
     except Exception as e:
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
