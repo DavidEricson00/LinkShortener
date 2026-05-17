@@ -47,8 +47,10 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
 
       Policies:
         - PolicyName: link-shortener-policy
@@ -83,8 +85,10 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
 
       Policies:
         - PolicyName: link-analytics-policy
@@ -111,8 +115,10 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
 
       Policies:
         - PolicyName: link-authorizer-policy
@@ -210,8 +216,11 @@ Resources:
       IdentitySource:
         - "$request.header.x-api-key"
 
-      AuthorizerUri: !Sub >
-        arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthorizerFunction.Arn}/invocations
+      Name: api-authorizer
+
+      AuthorizerUri: !Sub
+        - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthorizerArn}/invocations
+        - AuthorizerArn: !GetAtt AuthorizerFunction.Arn
 
   LambdaIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -232,7 +241,11 @@ Resources:
       RouteKey: "POST /links"
       AuthorizationType: CUSTOM
       AuthorizerId: !Ref ApiAuthorizer
-      Target: !Sub integrations/${LambdaIntegration}
+
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref LambdaIntegration
 
   RouteGet:
     Type: AWS::ApiGatewayV2::Route
@@ -242,7 +255,11 @@ Resources:
     Properties:
       ApiId: !Ref ApiGateway
       RouteKey: "GET /{id}"
-      Target: !Sub integrations/${LambdaIntegration}
+
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref LambdaIntegration
 
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
@@ -262,7 +279,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
 
-      SourceArn: !Sub >
+      SourceArn: !Sub
         arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*
 
   LambdaPermission:
@@ -272,7 +289,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
 
-      SourceArn: !Sub >
+      SourceArn: !Sub
         arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*
 
 Outputs:
