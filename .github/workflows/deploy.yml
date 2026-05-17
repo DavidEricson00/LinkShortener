@@ -43,6 +43,8 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy CloudFormation stack
+        env:
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: |
           aws cloudformation deploy \
             --template-file template.yaml \
