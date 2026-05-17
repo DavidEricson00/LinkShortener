@@ -4,9 +4,17 @@ import os
 import secrets
 import time
 
+lambda_client = None
+
 def get_table():
-    dynamodb = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    dynamodb = boto3.resource("dynamodb")
     return dynamodb.Table(os.environ.get("TABLE_NAME", "links"))
+
+def get_lambda_client():
+    global lambda_client
+    if lambda_client is None:
+        lambda_client = boto3.client("lambda")
+    return lambda_client
 
 def create_link(event):
     try:
@@ -45,6 +53,15 @@ def redirect_link(slug):
 
         if not item:
             return {"statusCode": 404, "body": json.dumps({"error": "not found"})}
+
+        try:
+            get_lambda_client().invoke(
+                FunctionName="link-analytics",
+                InvocationType="Event",
+                Payload=json.dumps({"slug": slug}).encode()
+            )
+        except Exception:
+            pass
 
         return {
             "statusCode": 301,
