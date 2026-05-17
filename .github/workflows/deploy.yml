@@ -47,27 +47,50 @@ jobs:
           aws cloudformation deploy \
             --template-file template.yaml \
             --stack-name link-shortener \
-            --capabilities CAPABILITY_NAMED_IAM \
+            --capabilities CAPABILITY_IAM \
             --parameter-overrides \
               AlertEmail=${{ secrets.ALERT_EMAIL }} \
               ApiKeyValue=${{ secrets.API_KEY }}
 
+      - name: Get Lambda names
+        id: lambda_names
+        run: |
+          MAIN=$(aws cloudformation describe-stacks \
+            --stack-name link-shortener \
+            --query "Stacks[0].Outputs[?OutputKey=='LambdaFunctionName'].OutputValue" \
+            --output text)
+
+          ANALYTICS=$(aws cloudformation describe-stacks \
+            --stack-name link-shortener \
+            --query "Stacks[0].Outputs[?OutputKey=='AnalyticsFunctionName'].OutputValue" \
+            --output text)
+
+          AUTHORIZER=$(aws cloudformation describe-stacks \
+            --stack-name link-shortener \
+            --query "Stacks[0].Outputs[?OutputKey=='AuthorizerFunctionName'].OutputValue" \
+            --output text)
+
+          echo "main=$MAIN" >> $GITHUB_OUTPUT
+          echo "analytics=$ANALYTICS" >> $GITHUB_OUTPUT
+          echo "authorizer=$AUTHORIZER" >> $GITHUB_OUTPUT
+
       - name: Deploy Lambda code
         run: |
           cd lambda
+
           zip function.zip handler.py
           aws lambda update-function-code \
-            --function-name link-shortener \
+            --function-name "${{ steps.lambda_names.outputs.main }}" \
             --zip-file fileb://function.zip
 
           zip analytics.zip analytics.py
           aws lambda update-function-code \
-            --function-name link-analytics \
+            --function-name "${{ steps.lambda_names.outputs.analytics }}" \
             --zip-file fileb://analytics.zip
 
           zip authorizer.zip authorizer.py
           aws lambda update-function-code \
-            --function-name link-authorizer \
+            --function-name "${{ steps.lambda_names.outputs.authorizer }}" \
             --zip-file fileb://authorizer.zip
 
       - name: Get API URL
