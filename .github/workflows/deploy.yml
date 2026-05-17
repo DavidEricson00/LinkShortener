@@ -47,7 +47,7 @@ jobs:
           aws cloudformation deploy \
             --template-file template.yaml \
             --stack-name link-shortener \
-            --capabilities CAPABILITY_NAMED_IAM
+            --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides \
               AlertEmail=${{ secrets.ALERT_EMAIL }} \
               ApiKeyValue=${{ secrets.API_KEY }}
