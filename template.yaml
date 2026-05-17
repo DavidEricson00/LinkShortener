@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: URL shortener 
+Description: URL shortener
 
 Parameters:
   AlertEmail:
     Type: String
     Description: Email to receive CloudWatch alerts
-  
+
 Resources:
 
   LinksTable:
@@ -23,7 +23,24 @@ Resources:
         AttributeName: expires_at
         Enabled: true
 
-  LambdaRole:
+  ClicksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: clicks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  # Role for link-shortener Lambda
+  # Needs: read/write links table, invoke analytics Lambda, write logs
+  LinkShortenerRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: link-shortener-role
@@ -35,7 +52,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: dynamodb-access
+        - PolicyName: link-shortener-policy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -43,9 +60,40 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
-                  - dynamodb:Scan
-                  - dynamodb:DeleteItem
                 Resource: !GetAtt LinksTable.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:link-analytics
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  # Role for link-analytics Lambda
+  # Needs: write clicks table, write logs — nothing else
+  LinkAnalyticsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: link-analytics-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: link-analytics-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt ClicksTable.Arn
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -59,7 +107,7 @@ Resources:
       FunctionName: link-shortener
       Runtime: python3.12
       Handler: handler.handler
-      Role: !GetAtt LambdaRole.Arn
+      Role: !GetAtt LinkShortenerRole.Arn
       Code:
         ZipFile: |
           def handler(event, context):
@@ -67,6 +115,21 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: links
+
+  AnalyticsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: link-analytics
+      Runtime: python3.12
+      Handler: analytics.handler
+      Role: !GetAtt LinkAnalyticsRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+            return {"statusCode": 200}
+      Environment:
+        Variables:
+          CLICKS_TABLE: clicks
 
   ApiGateway:
     Type: AWS::ApiGatewayV2::Api
@@ -90,7 +153,7 @@ Resources:
       IntegrationType: AWS_PROXY
       IntegrationUri: !GetAtt LambdaFunction.Arn
       PayloadFormatVersion: "2.0"
-      
+
   RoutePost:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -104,14 +167,14 @@ Resources:
       ApiId: !Ref ApiGateway
       RouteKey: "GET /{id}"
       Target: !Sub integrations/${LambdaIntegration}
-  
+
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
       ApiId: !Ref ApiGateway
       StageName: "$default"
       AutoDeploy: true
-      
+
   LambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
