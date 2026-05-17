@@ -219,7 +219,7 @@ Resources:
           "widgets": [
             {
               "type": "metric",
-              "width": 8,
+              "width": 6,
               "height": 6,
               "properties": {
                 "title": "Invocations",
@@ -231,7 +231,7 @@ Resources:
             },
             {
               "type": "metric",
-              "width": 8,
+              "width": 6,
               "height": 6,
               "properties": {
                 "title": "Errors",
@@ -243,13 +243,25 @@ Resources:
             },
             {
               "type": "metric",
-              "width": 8,
+              "width": 6,
               "height": 6,
               "properties": {
                 "title": "Duration (ms)",
                 "metrics": [["AWS/Lambda", "Duration", "FunctionName", "${LambdaFunction}"]],
                 "period": 300,
                 "stat": "Average",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "title": "Clicks",
+                "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "${AnalyticsFunction}"]],
+                "period": 300,
+                "stat": "Sum",
                 "view": "timeSeries"
               }
             }
