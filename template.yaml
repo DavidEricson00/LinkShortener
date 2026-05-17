@@ -129,7 +129,7 @@ Resources:
             return {"statusCode": 200}
       Environment:
         Variables:
-          CLICKS_TABLE: clicks
+          TABLE_NAME: clicks
 
   ApiGateway:
     Type: AWS::ApiGatewayV2::Api
