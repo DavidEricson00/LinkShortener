@@ -19,6 +19,9 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
 
   LambdaRole:
     Type: AWS::IAM::Role
