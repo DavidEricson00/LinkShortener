@@ -196,11 +196,12 @@ Resources:
       ApiId: !Ref ApiGateway
       AuthorizerType: REQUEST
       AuthorizerPayloadFormatVersion: "2.0"
-      AuthorizerFunctionArn: !GetAtt AuthorizerFunction.Arn
       EnableSimpleResponses: true
       Name: api-key-authorizer
       IdentitySource:
         - "$request.header.x-api-key"
+      AuthorizerUri:
+        !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthorizerFunction.Arn}/invocations
 
   LambdaIntegration:
     Type: AWS::ApiGatewayV2::Integration
