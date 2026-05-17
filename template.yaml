@@ -1,5 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: URL shortener 
+Description: URL shortener
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email to receive CloudWatch alerts
+  ApiKeyValue:
+    Type: String
+    NoEcho: true
+    Description: Secret key to protect POST /links
 
 Resources:
 
@@ -14,8 +23,28 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
 
-  LambdaRole:
+  ClicksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: clicks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  # Role for link-shortener Lambda
+  # Needs: read/write links table, invoke analytics Lambda, write logs
+  LinkShortenerRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: link-shortener-role
@@ -27,7 +56,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: dynamodb-access
+        - PolicyName: link-shortener-policy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -35,9 +64,11 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
-                  - dynamodb:Scan
-                  - dynamodb:DeleteItem
                 Resource: !GetAtt LinksTable.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:link-analytics
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -45,13 +76,66 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "*"
 
+  # Role for link-analytics Lambda
+  # Needs: write clicks table, write logs — nothing else
+  LinkAnalyticsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: link-analytics-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: link-analytics-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt ClicksTable.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  AuthorizerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: link-authorizer-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: link-authorizer-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: link-shortener
       Runtime: python3.12
       Handler: handler.handler
-      Role: !GetAtt LambdaRole.Arn
+      Role: !GetAtt LinkShortenerRole.Arn
       Code:
         ZipFile: |
           def handler(event, context):
@@ -59,6 +143,36 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: links
+
+  AnalyticsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: link-analytics
+      Runtime: python3.12
+      Handler: analytics.handler
+      Role: !GetAtt LinkAnalyticsRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+            return {"statusCode": 200}
+      Environment:
+        Variables:
+          TABLE_NAME: clicks
+
+  AuthorizerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: link-authorizer
+      Runtime: python3.12
+      Handler: authorizer.handler
+      Role: !GetAtt AuthorizerRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+            return {"isAuthorized": False}
+      Environment:
+        Variables:
+          API_KEY: !Ref ApiKeyValue
 
   ApiGateway:
     Type: AWS::ApiGatewayV2::Api
@@ -74,6 +188,20 @@ Resources:
           - DELETE
         AllowHeaders:
           - Content-Type
+          - x-api-key
+
+  ApiAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref ApiGateway
+      AuthorizerType: REQUEST
+      AuthorizerPayloadFormatVersion: "2.0"
+      EnableSimpleResponses: true
+      Name: api-key-authorizer
+      IdentitySource:
+        - "$request.header.x-api-key"
+      AuthorizerUri:
+        !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthorizerFunction.Arn}/invocations
 
   LambdaIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -82,12 +210,14 @@ Resources:
       IntegrationType: AWS_PROXY
       IntegrationUri: !GetAtt LambdaFunction.Arn
       PayloadFormatVersion: "2.0"
-      
+
   RoutePost:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref ApiGateway
       RouteKey: "POST /links"
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref ApiAuthorizer
       Target: !Sub integrations/${LambdaIntegration}
 
   RouteGet:
@@ -96,14 +226,31 @@ Resources:
       ApiId: !Ref ApiGateway
       RouteKey: "GET /{id}"
       Target: !Sub integrations/${LambdaIntegration}
-  
+
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
       ApiId: !Ref ApiGateway
       StageName: "$default"
       AutoDeploy: true
-      
+
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 100
+        ThrottlingBurstLimit: 200
+
+      RouteSettings:
+        "POST /links":
+          ThrottlingRateLimit: 5
+          ThrottlingBurstLimit: 10
+
+  AuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthorizerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*
+  
   LambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -111,6 +258,91 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: link-shortener-alerts
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  ErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: link-shortener-errors
+      AlarmDescription: Fires when error rate exceeds 5%
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: link-shortener
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "title": "Invocations",
+                "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "${LambdaFunction}"]],
+                "period": 300,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "title": "Errors",
+                "metrics": [["AWS/Lambda", "Errors", "FunctionName", "${LambdaFunction}"]],
+                "period": 300,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "title": "Duration (ms)",
+                "metrics": [["AWS/Lambda", "Duration", "FunctionName", "${LambdaFunction}"]],
+                "period": 300,
+                "stat": "Average",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "title": "Clicks",
+                "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "${AnalyticsFunction}"]],
+                "period": 300,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            }
+          ]
+        }
 
 Outputs:
   ApiUrl:
