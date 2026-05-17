@@ -2,29 +2,89 @@ import json
 import boto3
 import os
 import secrets
+import time
+
+lambda_client = None
 
 def get_table():
-    dynamodb = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    dynamodb = boto3.resource("dynamodb")
     return dynamodb.Table(os.environ.get("TABLE_NAME", "links"))
+
+def get_lambda_client():
+    global lambda_client
+    if lambda_client is None:
+        lambda_client = boto3.client("lambda")
+    return lambda_client
 
 def create_link(event):
     try:
         table = get_table()
-        body = json.loads(event.get("body") or "{}")
+
+        raw_body = event.get("body") or ""
+
+        if len(raw_body) > 4096:
+            return {
+                "statusCode": 413,
+                "body": json.dumps({"error": "payload too large"})
+            }
+
+        try:
+            body = json.loads(raw_body)
+        except json.JSONDecodeError:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "invalid json"})
+            }
+
         url = body.get("url")
 
-        if not url:
-            return {"statusCode": 400, "body": json.dumps({"error": "url is required"})}
+        if not isinstance(url, str):
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "url must be string"})
+            }
+
+        url = url.strip()
+
+        if len(url) > 2048:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "url too long"})
+            }
+
+        if not url.startswith(("http://", "https://")):
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "invalid url"})
+            }
 
         slug = secrets.token_urlsafe(4)
-        table.put_item(Item={"id": slug, "url": url})
+
+        expires_at = int(time.time()) + (30 * 24 * 60 * 60)
+
+        table.put_item(
+            Item={
+                "id": slug,
+                "url": url,
+                "expires_at": expires_at
+            },
+            ConditionExpression="attribute_not_exists(id)"
+        )
 
         return {
             "statusCode": 201,
-            "body": json.dumps({"short_url": slug, "url": url})
+            "body": json.dumps({
+                "short_url": slug,
+                "url": url,
+                "expires_at": expires_at
+            })
         }
+
     except Exception as e:
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
 
 def redirect_link(slug):
     try:
@@ -34,6 +94,15 @@ def redirect_link(slug):
 
         if not item:
             return {"statusCode": 404, "body": json.dumps({"error": "not found"})}
+
+        try:
+            get_lambda_client().invoke(
+                FunctionName="link-analytics",
+                InvocationType="Event",
+                Payload=json.dumps({"slug": slug}).encode()
+            )
+        except Exception:
+            pass
 
         return {
             "statusCode": 301,

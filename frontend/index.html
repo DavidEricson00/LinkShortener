@@ -133,6 +133,7 @@
 
   <script>
     const API_URL = "%%API_URL%%";
+    const API_KEY = "%%API_KEY%%";
 
     async function shortenUrl() {
       const input = document.getElementById("input");
@@ -150,10 +151,13 @@
       error.style.display = "none";
 
       try {
-        const res = await fetch(`${API_URL}/links`,{
+        const res = await fetch(`${API_URL}/links`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({url})
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": API_KEY
+          },
+          body: JSON.stringify({ url })
         });
 
         const data = await res.json();
