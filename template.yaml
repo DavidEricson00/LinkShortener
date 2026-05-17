@@ -146,6 +146,50 @@ Resources:
 
   Dashboard:
     Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: link-shortener
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "Invocations",
+                "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "${LambdaFunction}"]],
+                "period": 300,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "Errors",
+                "metrics": [["AWS/Lambda", "Errors", "FunctionName", "${LambdaFunction}"]],
+                "period": 300,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "title": "Duration (ms)",
+                "metrics": [["AWS/Lambda", "Duration", "FunctionName", "${LambdaFunction}"]],
+                "period": 300,
+                "stat": "Average",
+                "view": "timeSeries"
+              }
+            }
+          ]
+        }
+
 Outputs:
   ApiUrl:
     Value: !GetAtt ApiGateway.ApiEndpoint
