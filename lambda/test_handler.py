@@ -85,5 +85,5 @@ def test_redirect_invokes_analytics_lambda(mock_get_table, mock_get_lambda_clien
     mock_lambda.invoke.assert_called_once_with(
         FunctionName="link-analytics",
         InvocationType="Event",
-        Payload=json.dumps({"slug": "xK3p9"})
+        Payload=json.dumps({"slug": "xK3p9"}).encode()
     )
