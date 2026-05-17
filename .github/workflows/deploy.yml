@@ -48,7 +48,9 @@ jobs:
             --template-file template.yaml \
             --stack-name link-shortener \
             --capabilities CAPABILITY_NAMED_IAM
-            --parameter-overrides AlertEmail=${{ secrets.ALERT_EMAIL }}
+            --parameter-overrides \
+              AlertEmail=${{ secrets.ALERT_EMAIL }} \
+              ApiKeyValue=${{ secrets.API_KEY }}
 
       - name: Deploy Lambda code
         run: |
@@ -62,6 +64,11 @@ jobs:
           aws lambda update-function-code \
             --function-name link-analytics \
             --zip-file fileb://analytics.zip
+
+          zip authorizer.zip authorizer.py
+          aws lambda update-function-code \
+            --function-name link-authorizer \
+            --zip-file fileb://authorizer.zip
 
       - name: Get API URL
         id: api_url
