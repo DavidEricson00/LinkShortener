@@ -24,6 +24,7 @@ def test_create_link_returns_201(mock_get_table):
     assert res["statusCode"] == 201
     data = json.loads(res["body"])
     assert "short_url" in data
+    assert "expires_at" in data
     assert data["url"] == "https://github.com"
 
 @patch("handler.get_table")
