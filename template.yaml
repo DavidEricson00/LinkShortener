@@ -343,6 +343,7 @@ Resources:
               "width": 6,
               "height": 6,
               "properties": {
+                "region": "${AWS::Region}",
                 "title": "Lambda Invocations",
                 "metrics": [
                   [
@@ -362,6 +363,7 @@ Resources:
               "width": 6,
               "height": 6,
               "properties": {
+                "region": "${AWS::Region}",
                 "title": "Lambda Errors",
                 "metrics": [
                   [
@@ -381,6 +383,7 @@ Resources:
               "width": 6,
               "height": 6,
               "properties": {
+                "region": "${AWS::Region}",
                 "title": "Lambda Duration",
                 "metrics": [
                   [
@@ -400,6 +403,7 @@ Resources:
               "width": 6,
               "height": 6,
               "properties": {
+                "region": "${AWS::Region}",
                 "title": "Analytics Invocations",
                 "metrics": [
                   [
